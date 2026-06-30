@@ -8,8 +8,8 @@
  * example prompts, and submission to /api/panic.
  */
 
-import React, { useState, useRef, useCallback, KeyboardEvent } from 'react';
-import { Zap, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useRef, useCallback, KeyboardEvent, useEffect } from 'react';
+import { Zap, AlertCircle, Loader2, ChevronDown, ChevronUp, Mic, MicOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from './AuthProvider';
 import type { FirestoreTask } from '@/types/task';
@@ -36,6 +36,65 @@ export default function PanicIntake({ onTaskCreated, disabled = false }: PanicIn
   const [charCount, setCharCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 5000;
+
+  // Speech Recognition States
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        setSpeechSupported(true);
+        const rec = new SpeechRecognition();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = 'en-US';
+
+        rec.onresult = (event: any) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          setInput((prev) => {
+            const combined = (prev + ' ' + transcript).trim();
+            setCharCount(combined.length);
+            return combined;
+          });
+        };
+
+        rec.onerror = (e: any) => {
+          console.error('[Speech] Error:', e);
+          setIsListening(false);
+        };
+
+        rec.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = rec;
+      }
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) return;
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      toast.success('Voice input stopped.');
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+      toast.success('Listening... Speak your panic now.', {
+        icon: '🎙️',
+        style: { background: '#68000f', color: '#ffb3b0', border: '1px solid #ffb3b0' }
+      });
+    }
+  };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -179,7 +238,32 @@ export default function PanicIntake({ onTaskCreated, disabled = false }: PanicIn
         {/* Footer bar */}
         <div className="flex items-center justify-between px-4 pb-4 pt-1 border-t border-border-subtle/50">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-text-secondary/60">
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={cn(
+                  'p-2 rounded-xl border transition-all duration-200 flex items-center justify-center gap-1.5 text-xs font-bold',
+                  isListening
+                    ? 'bg-crisis-bg text-crisis border-crisis animate-pulse'
+                    : 'bg-bg-raised text-text-secondary/80 border-border-subtle hover:text-text-primary'
+                )}
+                title={isListening ? 'Stop listening' : 'Start voice transcription'}
+              >
+                {isListening ? (
+                  <>
+                    <MicOff className="w-3.5 h-3.5" />
+                    <span>Stop Mic</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Voice Input</span>
+                  </>
+                )}
+              </button>
+            )}
+            <span className="text-xs text-text-secondary/40 hidden sm:inline-block">
               <kbd className="px-1.5 py-0.5 rounded bg-bg-raised text-text-secondary border border-border-subtle/60 text-[10px]">
                 ⌘
               </kbd>
@@ -218,6 +302,32 @@ export default function PanicIntake({ onTaskCreated, disabled = false }: PanicIn
           </button>
         </div>
       </div>
+
+      {/* Example Prompt Chips (visible when input is empty) */}
+      {input.length === 0 && !loading && (
+        <div className="flex flex-wrap items-center gap-2.5 animate-slide-up pt-1.5">
+          <span className="text-[10px] text-text-secondary/40 uppercase tracking-widest font-bold">Quick Try:</span>
+          <button
+            onClick={() => applyExample(EXAMPLE_PROMPTS[0])}
+            className="px-3.5 py-1.5 rounded-full bg-bg-card/50 hover:bg-bg-hover border border-border-subtle hover:border-urgency/50 text-xs text-text-secondary hover:text-text-primary transition-all duration-200"
+          >
+            Research Paper Due 📝
+          </button>
+          <button
+            onClick={() => applyExample(EXAMPLE_PROMPTS[1])}
+            className="px-3.5 py-1.5 rounded-full bg-bg-card/50 hover:bg-bg-hover border border-border-subtle hover:border-urgency/50 text-xs text-text-secondary hover:text-text-primary transition-all duration-200"
+          >
+            Slides for Client 🎤
+          </button>
+          <button
+            onClick={() => applyExample(EXAMPLE_PROMPTS[3])}
+            className="px-3.5 py-1.5 rounded-full bg-bg-card/50 hover:bg-bg-hover border border-border-subtle hover:border-urgency/50 text-xs text-text-secondary hover:text-text-primary transition-all duration-200"
+          >
+            Code due tonight 💻
+          </button>
+        </div>
+      )}
+
 
       {/* AI Analysis Loading State */}
       {loading && (

@@ -23,6 +23,8 @@ import {
 } from 'firebase/auth';
 import { getFirebaseAuth, getGoogleProvider } from '@/lib/firebase';
 import type { AuthUser } from '@/types/task';
+import { useTabUrgency } from './useTabUrgency';
+
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,7 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -92,10 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{ user, firebaseUser, loading, signInWithGoogle, signOut, getIdToken }}
     >
+      <TabUrgencyTrigger />
       {children}
     </AuthContext.Provider>
   );
 }
+
+function TabUrgencyTrigger() {
+  useTabUrgency();
+  return null;
+}
+
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 

@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   Zap,
   LogOut,
@@ -19,7 +20,13 @@ import {
   Loader2,
   Activity,
   Bell,
+  Settings,
+  BarChart3,
+  History,
+  Sparkles,
+  BookOpen,
 } from 'lucide-react';
+
 import Image from 'next/image';
 import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { getFirebaseDb } from '@/lib/firebase';
@@ -41,12 +48,51 @@ function DashboardContent() {
   const [tasksLoading, setTasksLoading] = useState(true);
   const [intakeExpanded, setIntakeExpanded] = useState(true);
 
-  // ── Auth Gate ──────────────────────────────────────────────
+  // ── Auth Gate & Onboarding Check ───────────────────────────
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (authLoading) return;
+
+    if (!user) {
       router.push('/');
+      return;
     }
+
+    const checkOnboarding = async () => {
+      try {
+        let localOnboarded = null;
+        try {
+          localOnboarded = localStorage.getItem(`v2s_onboarded_${user.uid}`);
+        } catch (e) {
+          console.warn('localStorage read blocked:', e);
+        }
+
+        if (localOnboarded === 'true') {
+          return;
+        }
+
+        const db = getFirebaseDb();
+        const { getDoc, doc } = await import('firebase/firestore');
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        
+        if (userSnap.exists() && userSnap.data()?.onboarded === true) {
+          try {
+            localStorage.setItem(`v2s_onboarded_${user.uid}`, 'true');
+          } catch (e) {
+            console.warn('localStorage write blocked:', e);
+          }
+          return;
+        }
+
+        router.push('/onboarding');
+      } catch (err) {
+        console.error('Failed to check onboarding status:', err);
+      }
+    };
+
+    checkOnboarding();
   }, [user, authLoading, router]);
+
+
 
   // ── Firestore Real-time Subscription ──────────────────────
   useEffect(() => {
@@ -55,20 +101,28 @@ function DashboardContent() {
     const db = getFirebaseDb();
     const tasksQuery = query(
       collection(db, 'tasks'),
-      where('user_id', '==', user.uid),
-      where('archived', '==', false),
-      orderBy('created_at', 'desc'),
-      limit(20)
+      where('user_id', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(
       tasksQuery,
       (snapshot) => {
-        const updatedTasks = snapshot.docs.map((doc) => ({
+        const rawTasks = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as FirestoreTask[];
-        setTasks(updatedTasks);
+        
+        // Filter, sort, and slice in-memory to prevent index requirements
+        const processedTasks = rawTasks
+          .filter((t) => t.archived === false)
+          .sort((a, b) => {
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return timeB - timeA;
+          })
+          .slice(0, 20);
+
+        setTasks(processedTasks);
         setTasksLoading(false);
       },
       (error) => {
@@ -81,6 +135,7 @@ function DashboardContent() {
 
     return unsubscribe;
   }, [user]);
+
 
   // ── Scroll to task if task param in URL ───────────────────
   useEffect(() => {
@@ -190,8 +245,9 @@ function DashboardContent() {
         <div className="bg-crisis-bg/30 border-b border-crisis/50 px-4 py-2 flex items-center justify-center gap-2 animate-border-pulse">
           <Activity className="w-4 h-4 text-crisis animate-pulse" />
           <span className="text-sm font-bold text-crisis animate-glow-pulse">
-            🚨 {criticalCount} CRITICAL DEADLINE{criticalCount > 1 ? 'S' : ''} — Immediate action required
+            {'\ud83d\udea8'} {criticalCount} CRITICAL DEADLINE{criticalCount > 1 ? 'S' : ''} — Immediate action required
           </span>
+
         </div>
       )}
 
@@ -207,7 +263,44 @@ function DashboardContent() {
           </div>
         </div>
 
+
+        {/* Navigation links group (Desktop) */}
+        <div className="hidden md:flex items-center gap-5 text-xs font-bold text-text-secondary">
+          <Link href="/demo" className="flex items-center gap-1 text-urgency bg-urgency-bg/25 px-2.5 py-1 rounded-lg border border-urgency/30 hover:bg-urgency-bg/40 transition-colors uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+            <span>Judge Mode</span>
+          </Link>
+          <Link href="/insights" className="hover:text-white transition-colors uppercase tracking-wider flex items-center gap-1">
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Insights</span>
+          </Link>
+          <Link href="/history" className="hover:text-white transition-colors uppercase tracking-wider flex items-center gap-1">
+            <History className="w-3.5 h-3.5" />
+            <span>Archive</span>
+          </Link>
+          <Link href="/settings" className="hover:text-white transition-colors uppercase tracking-wider flex items-center gap-1">
+            <Settings className="w-3.5 h-3.5" />
+            <span>Settings</span>
+          </Link>
+        </div>
+
         <div className="flex items-center gap-3">
+          {/* Quick Page Links (Mobile) */}
+          <div className="flex md:hidden items-center gap-1">
+            <Link href="/demo" title="Judge Mode" className="p-1.5 rounded text-urgency hover:bg-bg-hover">
+              <Sparkles className="w-3.5 h-3.5" />
+            </Link>
+            <Link href="/insights" title="Insights" className="p-1.5 rounded text-text-secondary hover:bg-bg-hover hover:text-white">
+              <BarChart3 className="w-3.5 h-3.5" />
+            </Link>
+            <Link href="/history" title="History" className="p-1.5 rounded text-text-secondary hover:bg-bg-hover hover:text-white">
+              <History className="w-3.5 h-3.5" />
+            </Link>
+            <Link href="/settings" title="Settings" className="p-1.5 rounded text-text-secondary hover:bg-bg-hover hover:text-white">
+              <Settings className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
           {/* Task count badges */}
           <div className="hidden sm:flex items-center gap-2">
             {criticalCount > 0 && (
@@ -352,10 +445,20 @@ function EmptyState() {
       <p className="text-sm text-text-secondary max-w-sm leading-relaxed">
         Describe your deadline situation above and Gemini will instantly create an action plan.
       </p>
-      <div className="mt-6 flex items-center gap-2 text-xs text-mint">
-        <Bell className="w-3.5 h-3.5" />
-        <span>You&apos;re all clear — no active emergencies</span>
+      <div className="mt-6 flex flex-col items-center gap-3">
+        <div className="flex items-center gap-2 text-xs text-mint">
+          <Bell className="w-3.5 h-3.5" />
+          <span>You&apos;re all clear — no active emergencies</span>
+        </div>
+        <Link
+          href="/demo"
+          className="text-xs text-urgency hover:underline font-bold mt-1 block"
+        >
+          {'\u26a1'} Launch Simulated Judge Mode to test reactive states instantly {'\u2794'}
+        </Link>
+
       </div>
+
     </div>
   );
 }

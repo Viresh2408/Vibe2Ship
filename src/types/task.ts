@@ -103,3 +103,11 @@ export interface AuthUser {
   displayName: string | null;
   photoURL: string | null;
 }
+
+export interface UserSettings {
+  critical_threshold_minutes: number;
+  high_threshold_minutes: number;
+  timezone_override: string;
+  notifications_enabled: boolean;
+}
+

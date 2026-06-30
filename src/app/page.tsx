@@ -11,16 +11,55 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Zap, Clock, Brain, Bell, ArrowRight, Shield, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { getFirebaseDb } from '@/lib/firebase';
+
 
 export default function HomePage() {
   const { user, loading, signInWithGoogle } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user) {
-      router.push('/dashboard');
+    if (loading) return;
+
+    if (user) {
+      const checkOnboardingAndRedirect = async () => {
+        try {
+          let localOnboarded = null;
+          try {
+            localOnboarded = localStorage.getItem(`v2s_onboarded_${user.uid}`);
+          } catch (e) {
+            console.warn('localStorage read blocked:', e);
+          }
+
+          if (localOnboarded === 'true') {
+            router.push('/dashboard');
+            return;
+          }
+
+          const db = getFirebaseDb();
+          const { getDoc, doc } = await import('firebase/firestore');
+          const userSnap = await getDoc(doc(db, 'users', user.uid));
+          
+          if (userSnap.exists() && userSnap.data()?.onboarded === true) {
+            try {
+              localStorage.setItem(`v2s_onboarded_${user.uid}`, 'true');
+            } catch (e) {
+              console.warn('localStorage write blocked:', e);
+            }
+            router.push('/dashboard');
+          } else {
+            router.push('/onboarding');
+          }
+        } catch (err) {
+          router.push('/dashboard'); // Safe fallback
+        }
+      };
+
+      checkOnboardingAndRedirect();
     }
   }, [user, loading, router]);
+
+
 
   if (loading) {
     return (

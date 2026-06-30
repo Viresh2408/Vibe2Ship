@@ -43,12 +43,33 @@ export function calculateCountdown(deadlineISO: string): CountdownState {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  const hoursRemaining = diffMs / (1000 * 60 * 60);
+  // Customizable thresholds
+  let criticalThresholdMins = 120; // default 2h
+  let highThresholdMins = 480; // default 8h
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('v2s_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.critical_threshold_minutes === 'number') {
+          criticalThresholdMins = parsed.critical_threshold_minutes;
+        }
+        if (typeof parsed.high_threshold_minutes === 'number') {
+          highThresholdMins = parsed.high_threshold_minutes;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  const minutesRemaining = diffMs / (1000 * 60);
   let urgencyLevel: UrgencyLevel;
 
-  if (hoursRemaining <= 2) urgencyLevel = 'critical';
-  else if (hoursRemaining <= 8) urgencyLevel = 'high';
-  else if (hoursRemaining <= 24) urgencyLevel = 'medium';
+  if (minutesRemaining <= criticalThresholdMins) urgencyLevel = 'critical';
+  else if (minutesRemaining <= highThresholdMins) urgencyLevel = 'high';
+  else if (minutesRemaining <= 1440) urgencyLevel = 'medium'; // 24h
   else urgencyLevel = 'low';
 
   return { days, hours, minutes, seconds, totalSeconds, isExpired: false, urgencyLevel };

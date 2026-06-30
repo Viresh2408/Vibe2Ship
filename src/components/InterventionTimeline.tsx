@@ -12,6 +12,8 @@
  */
 
 import React, { useState } from 'react';
+import Link from 'next/link';
+
 import {
   CheckCircle2,
   Circle,
@@ -148,9 +150,12 @@ export default function InterventionTimeline({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="text-xl font-black text-text-primary leading-tight line-clamp-2">
-                  {task.task_name}
-                </h3>
+                <Link href={`/task/${task.id}`}>
+                  <h3 className="text-xl font-black text-text-primary hover:text-urgency transition-colors leading-tight line-clamp-2 cursor-pointer">
+                    {task.task_name}
+                  </h3>
+                </Link>
+
                 {/* Context menu */}
                 <div className="relative flex-shrink-0">
                   <button

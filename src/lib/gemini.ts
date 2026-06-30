@@ -1,85 +1,122 @@
 /**
  * Gemini AI Engine — The Last-Minute Life Saver
  *
- * Initializes Google Gemini 1.5 Flash with structured JSON output mode.
- * Enforces strict schema for task decomposition and urgency scoring.
+ * Uses @google/genai in Vertex AI mode (service account / ADC) so we never
+ * depend on a GEMINI_API_KEY. Credentials come from:
+ *   - Local dev: GOOGLE_APPLICATION_CREDENTIALS pointing to the service-account JSON
+ *   - Cloud Run: Attached service account (ADC)
+ *
  * All calls are server-side only (called from API routes).
  */
 
-import {
-  GoogleGenerativeAI,
-  GenerativeModel,
-  GenerationConfig,
-  HarmCategory,
-  HarmBlockThreshold,
-} from '@google/generative-ai';
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Type } from '@google/genai';
 import type { GeminiDecompositionResponse, ActionStep } from '@/types/task';
 
-// ─── Singleton Client ────────────────────────────────────────────────────────
+// ─── Singleton Client (Vertex AI mode) ──────────────────────────────────────
 
-let geminiClient: GoogleGenerativeAI | null = null;
+let genAI: GoogleGenAI | null = null;
 
-function getGeminiClient(): GoogleGenerativeAI {
-  if (!geminiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        'GEMINI_API_KEY environment variable is not set. ' +
-          'Get your API key from https://aistudio.google.com'
-      );
+function getGenAIClient(): GoogleGenAI {
+  if (!genAI) {
+    const getEnv = (key: string) => (globalThis as any).process.env[key];
+    const setEnv = (key: string, val: string | undefined) => {
+      if (val === undefined) {
+        delete (globalThis as any).process.env[key];
+      } else {
+        (globalThis as any).process.env[key] = val;
+      }
+    };
+
+    const apiKey = getEnv('GEMINI_API_KEY');
+    if (apiKey) {
+      const keysToStrip = [
+        'GOOGLE_CLOUD_PROJECT',
+        'GOOGLE_APPLICATION_CREDENTIALS',
+        'GOOGLE_CLOUD_LOCATION',
+        'GOOGLE_API_KEY'
+      ];
+      
+      const tempVals: Record<string, string | undefined> = {};
+      keysToStrip.forEach((key) => {
+        tempVals[key] = getEnv(key);
+        setEnv(key, undefined);
+      });
+
+      try {
+        genAI = new GoogleGenAI({
+          apiKey: apiKey,
+        });
+      } finally {
+        keysToStrip.forEach((key) => {
+          if (tempVals[key] !== undefined) {
+            setEnv(key, tempVals[key]);
+          }
+        });
+      }
+    } else {
+      const project = getEnv('GOOGLE_CLOUD_PROJECT');
+      if (!project) {
+        throw new Error(
+          'Neither GEMINI_API_KEY nor GOOGLE_CLOUD_PROJECT is set. ' +
+            'Please configure at least one in your environment.'
+        );
+      }
+      genAI = new GoogleGenAI({
+        vertexai: true,
+        project,
+        location: getEnv('GOOGLE_CLOUD_LOCATION') || 'us-central1',
+      });
     }
-    geminiClient = new GoogleGenerativeAI(apiKey);
   }
-  return geminiClient;
+  return genAI;
 }
+
+
+
+
+
 
 // ─── JSON Schema Definition ──────────────────────────────────────────────────
 
 /**
- * Vertex AI-compatible JSON schema for task decomposition.
- * Forces Gemini to return strictly validated structured output.
+ * Structured output schema for task decomposition.
+ * Forces the model to return strictly validated JSON.
  */
 const TASK_DECOMPOSITION_SCHEMA = {
-  type: 'object',
+  type: Type.OBJECT,
   properties: {
     task_name: {
-      type: 'string',
+      type: Type.STRING,
       description: 'A concise, actionable name for the overall task (max 60 chars)',
     },
     true_deadline: {
-      type: 'string',
+      type: Type.STRING,
       description: 'ISO 8601 timestamp of the actual hard deadline',
     },
     urgency_score: {
-      type: 'integer',
-      minimum: 1,
-      maximum: 10,
+      type: Type.INTEGER,
       description:
         'Urgency score from 1–10 based on time delta. 10 = under 2h, 9 = under 4h, 7-8 = under 8h, 5-6 = under 24h, 3-4 = under 3 days, 1-2 = over 3 days',
     },
     action_steps: {
-      type: 'array',
-      minItems: 3,
-      maxItems: 12,
+      type: Type.ARRAY,
       items: {
-        type: 'object',
+        type: Type.OBJECT,
         properties: {
           step_id: {
-            type: 'string',
+            type: Type.STRING,
             description: 'Unique identifier, format: step_001, step_002, etc.',
           },
           title: {
-            type: 'string',
+            type: Type.STRING,
             description: 'Clear, imperative action title (e.g., "Write introduction paragraph")',
           },
           duration_minutes: {
-            type: 'integer',
-            minimum: 5,
-            maximum: 180,
+            type: Type.INTEGER,
             description: 'Estimated time to complete this step in minutes',
           },
           action_type: {
-            type: 'string',
+            type: Type.STRING,
             enum: [
               'write',
               'research',
@@ -94,9 +131,9 @@ const TASK_DECOMPOSITION_SCHEMA = {
             ],
           },
           ai_starter_prompt: {
-            type: 'string',
+            type: Type.STRING,
             description:
-              'A highly specific, immediately actionable prompt that the user can copy into any AI assistant to start executing this exact step. Must include context, format requirements, and desired output.',
+              'A highly specific, immediately actionable prompt the user can copy into any AI assistant to start this exact step.',
           },
         },
         required: ['step_id', 'title', 'duration_minutes', 'action_type', 'ai_starter_prompt'],
@@ -105,6 +142,27 @@ const TASK_DECOMPOSITION_SCHEMA = {
   },
   required: ['task_name', 'true_deadline', 'urgency_score', 'action_steps'],
 };
+
+// ─── Safety Settings ─────────────────────────────────────────────────────────
+
+const SAFETY_SETTINGS = [
+  {
+    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+  },
+];
 
 // ─── System Prompt ───────────────────────────────────────────────────────────
 
@@ -137,70 +195,43 @@ CRITICAL RULES:
 You MUST respond with valid JSON only. No markdown, no explanation, pure JSON matching the schema.`;
 }
 
-// ─── Generation Config ───────────────────────────────────────────────────────
-
-const GENERATION_CONFIG: GenerationConfig = {
-  responseMimeType: 'application/json',
-  temperature: 0.4, // Low temperature for structured, reliable output
-  topP: 0.8,
-  topK: 40,
-  maxOutputTokens: 4096,
-};
-
-// Safety settings — permissive enough for academic/professional content
-const SAFETY_SETTINGS = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-];
-
 // ─── Core Decomposition Function ─────────────────────────────────────────────
 
 /**
  * Decomposes a panicked deadline input into structured micro-action steps.
+ * Uses Vertex AI (ADC / service account) — no API key required.
  * Returns a validated GeminiDecompositionResponse.
  */
 export async function decomposeDeadline(
   rawInput: string
 ): Promise<GeminiDecompositionResponse> {
-  const client = getGeminiClient();
+  const ai = getGenAIClient();
   const currentTime = new Date().toISOString();
-
-  const model: GenerativeModel = client.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
-    systemInstruction: buildSystemPrompt(currentTime),
-    generationConfig: GENERATION_CONFIG,
-    safetySettings: SAFETY_SETTINGS,
-  });
+  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
   const prompt = `PANIC INPUT: "${rawInput}"
 
 Analyze this deadline situation and return a complete structured action plan as JSON.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: prompt,
+      config: {
+        systemInstruction: buildSystemPrompt(currentTime),
+        responseMimeType: 'application/json',
+        responseSchema: TASK_DECOMPOSITION_SCHEMA,
+        temperature: 0.4,
+        topP: 0.8,
+        topK: 40,
+        maxOutputTokens: 4096,
+        safetySettings: SAFETY_SETTINGS,
+      },
+    });
 
-    if (!response) {
-      throw new Error('Gemini returned empty response');
-    }
-
-    const text = response.text();
+    const text = response.text;
     if (!text) {
-      throw new Error('Gemini returned empty text');
+      throw new Error('AI returned empty response');
     }
 
     // Parse and validate the JSON response
@@ -208,14 +239,14 @@ Analyze this deadline situation and return a complete structured action plan as 
 
     // Basic validation
     if (!parsed.task_name || !parsed.true_deadline || !parsed.action_steps) {
-      throw new Error('Gemini response missing required fields');
+      throw new Error('AI response missing required fields');
     }
 
     if (!Array.isArray(parsed.action_steps) || parsed.action_steps.length === 0) {
-      throw new Error('Gemini returned no action steps');
+      throw new Error('AI returned no action steps');
     }
 
-    // Ensure urgency score is within bounds
+    // Clamp urgency score within bounds
     parsed.urgency_score = Math.max(1, Math.min(10, Math.round(parsed.urgency_score)));
 
     // Validate deadline is a parseable date
@@ -227,7 +258,7 @@ Analyze this deadline situation and return a complete structured action plan as 
     return parsed;
   } catch (error) {
     if (error instanceof SyntaxError) {
-      throw new Error('Gemini returned invalid JSON. Please try again.');
+      throw new Error('AI returned invalid JSON. Please try again.');
     }
     throw error;
   }
@@ -243,21 +274,8 @@ export async function executeStepStreaming(
   step: Pick<ActionStep, 'title' | 'ai_starter_prompt' | 'action_type'>,
   taskContext: string
 ): Promise<ReadableStream<Uint8Array>> {
-  const client = getGeminiClient();
-
-  const model: GenerativeModel = client.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
-    systemInstruction: `You are an expert execution assistant. The user is under extreme time pressure. 
-Provide an immediately usable, high-quality response. 
-Format your response in clean markdown with clear sections.
-Be direct, actionable, and thorough. Start immediately — no preamble.`,
-    generationConfig: {
-      temperature: 0.7,
-      topP: 0.9,
-      maxOutputTokens: 2048,
-    },
-    safetySettings: SAFETY_SETTINGS,
-  });
+  const ai = getGenAIClient();
+  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
   const contextualPrompt = `TASK CONTEXT: ${taskContext}
 CURRENT STEP: ${step.title} (${step.action_type})
@@ -269,10 +287,23 @@ ${step.ai_starter_prompt}`;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const result = await model.generateContentStream(contextualPrompt);
+        const result = await ai.models.generateContentStream({
+          model: modelName,
+          contents: contextualPrompt,
+          config: {
+            systemInstruction: `You are an expert execution assistant. The user is under extreme time pressure. 
+Provide an immediately usable, high-quality response. 
+Format your response in clean markdown with clear sections.
+Be direct, actionable, and thorough. Start immediately — no preamble.`,
+            temperature: 0.7,
+            topP: 0.9,
+            maxOutputTokens: 2048,
+            safetySettings: SAFETY_SETTINGS,
+          },
+        });
 
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
+        for await (const chunk of result) {
+          const text = chunk.text;
           if (text) {
             const data = JSON.stringify({ type: 'text', content: text });
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
@@ -299,7 +330,7 @@ ${step.ai_starter_prompt}`;
 
 /**
  * Re-calculates urgency score based on current time vs deadline.
- * Use this to refresh scores without a full Gemini call.
+ * Use this to refresh scores without a full AI call.
  */
 export function recalculateUrgencyScore(deadlineISO: string): number {
   const now = Date.now();

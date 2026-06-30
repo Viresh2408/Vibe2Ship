@@ -70,17 +70,24 @@ export async function GET(request: NextRequest) {
     const snapshot = await db
       .collection(COLLECTIONS.TASKS)
       .where('user_id', '==', userId)
-      .where('archived', '==', false)
-      .orderBy('created_at', 'desc')
-      .limit(20)
       .get();
 
-    const tasks = snapshot.docs.map((doc) => ({
+    const allTasks = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      // Remove internal fields
       _serverTimestamp: undefined,
-    }));
+    })) as any[];
+
+    // In-memory filter, sort, and limit to bypass index requirement
+    const tasks = allTasks
+      .filter((t) => t.archived === false)
+      .sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return timeB - timeA;
+      })
+      .slice(0, 20);
+
 
     return NextResponse.json(
       { tasks },
@@ -213,3 +220,69 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to archive task' }, { status: 500 });
   }
 }
+
+// ─── PUT — Update Task Details (Steps, Deadline, Name) ───────────────────────
+
+export async function PUT(request: NextRequest) {
+  try {
+    // 30 updates per minute per user
+    const auth = await authorizeRequest(request, 'tasks_put', 30, 60000);
+    if (auth instanceof NextResponse) return auth;
+    const { userId, rateLimitRemaining } = auth;
+
+    const body = (await request.json()) as {
+      taskId: string;
+      action_steps?: any[];
+      true_deadline?: string;
+      task_name?: string;
+      urgency_score?: number;
+    };
+
+    const { taskId, action_steps, true_deadline, task_name, urgency_score } = body;
+    if (!taskId) {
+      return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
+    }
+
+    const db = getAdminDb();
+    const taskRef = db.collection(COLLECTIONS.TASKS).doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
+    const taskData = taskDoc.data()!;
+    if (taskData.user_id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const updates: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+      _serverTimestamp: FieldValue.serverTimestamp(),
+    };
+
+    if (action_steps !== undefined) {
+      updates.action_steps = action_steps;
+    }
+    if (true_deadline !== undefined) {
+      updates.true_deadline = true_deadline;
+    }
+    if (task_name !== undefined) {
+      updates.task_name = task_name;
+    }
+    if (urgency_score !== undefined) {
+      updates.urgency_score = urgency_score;
+    }
+
+    await taskRef.update(updates);
+
+    return NextResponse.json(
+      { success: true, taskId, updates },
+      { headers: { 'X-RateLimit-Remaining': String(rateLimitRemaining) } }
+    );
+  } catch (error) {
+    console.error('[API/tasks PUT]', error);
+    return NextResponse.json({ error: 'Failed to update task details' }, { status: 500 });
+  }
+}
+
