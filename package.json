@@ -1,0 +1,47 @@
+{
+  "name": "last-minute-life-saver",
+  "version": "1.0.0",
+  "description": "AI-powered autonomous deadline intervention engine — Vibe2Ship Hackathon",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "functions:deploy": "cd src/functions && gcloud functions deploy interventionCron --runtime nodejs20 --trigger-http --allow-unauthenticated --set-env-vars PROJECT_ID=$GCLOUD_PROJECT"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.0",
+    "@google-cloud/vertexai": "^1.9.0",
+    "@google/generative-ai": "^0.21.0",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.17.10",
+    "@types/dompurify": "^3.0.5",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "dompurify": "^3.2.3",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^12.7.0",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.469.0",
+    "marked": "^15.0.4",
+    "next": "14.2.21",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.4.1",
+    "tailwind-merge": "^2.6.0",
+    "three": "^0.185.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.21",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,276 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Google Fonts ─────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ─── Design Token CSS Custom Properties ──────────────────────────────── */
+/*
+  Elevation order (strict — never skip a level):
+    bg-base → bg-card → bg-hover → bg-raised → bg-active
+
+  Token spec:
+    Cool accent (#c2c6db)   → secondary CTAs, icon strokes, 3-D highlights
+    Urgency accent (#ffb3b0 on #68000f) → primary CTA ONLY, badges, heartbeat
+    Mint accent (#44dfab on #003827)    → success, resolved, pipeline final node
+    Crisis (#ffb4ab on #690005)         → crisis-section iconography ONLY
+*/
+:root {
+  /* ── Font ──────────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* ── Backgrounds (ascending elevation) ────────────────────────────── */
+  --bg-base:   #131313;  /* page / surface background                    */
+  --bg-card:   #1c1b1b;  /* elevated cards                               */
+  --bg-hover:  #201f1f;  /* card hover state                             */
+  --bg-raised: #2a2a2a;  /* secondary elevated surface                   */
+  --bg-active: #353534;  /* active / pressed state                       */
+
+  /* ── Text ──────────────────────────────────────────────────────────── */
+  --text-primary:   #e5e2e1;  /* on-surface                              */
+  --text-secondary: #c7c6cd;  /* on-surface-variant / muted              */
+
+  /* ── Borders & Dividers ────────────────────────────────────────────── */
+  --border-subtle: #46464c;  /* outline-variant (default)                */
+  --border-strong: #909097;  /* outline (on hover)                       */
+
+  /* ── Cool Accent — calm / trust ────────────────────────────────────── */
+  --cool: #c2c6db;
+
+  /* ── Urgency Accent — primary CTA only ─────────────────────────────── */
+  --urgency:    #ffb3b0;
+  --urgency-bg: #68000f;
+
+  /* ── Resolution Accent — mint ──────────────────────────────────────── */
+  --mint:    #44dfab;
+  --mint-bg: #003827;
+
+  /* ── Error / Critical ───────────────────────────────────────────────── */
+  --crisis:    #ffb4ab;
+  --crisis-bg: #690005;
+
+  /* ── Legacy (kept for backward-compat) ─────────────────────────────── */
+  --bg-primary:   var(--bg-base);
+  --bg-secondary: #111111;
+  --bg-card-old:  #1a1a1a;
+}
+
+/* ─── Base Styles ──────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── Custom Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-raised);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-active);
+}
+
+/* ─── Selection ─────────────────────────────────────────────────────────── */
+::selection {
+  background: rgba(255, 179, 176, 0.25);  /* urgency accent at low opacity */
+  color: var(--text-primary);
+}
+
+/* ─── Focus styles ──────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid rgba(194, 198, 219, 0.7);  /* cool accent */
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Glassmorphism utility ─────────────────────────────────────────────── */
+.glass {
+  background: rgba(28, 27, 27, 0.65);  /* bg-card at 65% opacity */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ─── Grid background ───────────────────────────────────────────────────── */
+.bg-grid {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.025)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
+}
+
+/* ─── Semantic button utilities ─────────────────────────────────────────── */
+/* Primary CTA — urgency accent only ("Try It Now / Get Instant Access") */
+.btn-primary {
+  background-color: var(--urgency-bg);
+  color: var(--urgency);
+  border: 1px solid var(--urgency);
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  transition: box-shadow 0.2s ease, filter 0.2s ease;
+}
+.btn-primary:hover {
+  box-shadow: 0 0 20px rgba(255, 179, 176, 0.45);
+  filter: brightness(1.08);
+}
+
+/* Secondary CTA — cool accent */
+.btn-secondary {
+  background-color: transparent;
+  color: var(--cool);
+  border: 1px solid var(--cool);
+  font-weight: 500;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-secondary:hover {
+  background-color: rgba(194, 198, 219, 0.08);
+  box-shadow: 0 0 16px rgba(194, 198, 219, 0.25);
+}
+
+/* ─── Card surface utility ──────────────────────────────────────────────── */
+.card-surface {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card-surface:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Text utility ──────────────────────────────────────────────────────── */
+.text-muted {
+  color: var(--text-secondary);
+}
+
+/* ─── Prose Dark Mode ───────────────────────────────────────────────────── */
+.prose-invert h1,
+.prose-invert h2,
+.prose-invert h3,
+.prose-invert h4 {
+  color: var(--text-primary);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-invert p {
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.prose-invert ul,
+.prose-invert ol {
+  color: var(--text-secondary);
+  padding-left: 1.5rem;
+}
+
+.prose-invert li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.prose-invert code {
+  background: var(--bg-raised);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.85em;
+  color: var(--mint);
+}
+
+.prose-invert pre {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.prose-invert pre code {
+  background: none;
+  padding: 0;
+}
+
+.prose-invert blockquote {
+  border-left: 3px solid rgba(255, 179, 176, 0.45);  /* urgency accent */
+  padding-left: 1rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.prose-invert strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* ─── Fade-in animation ─────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ─── Ticker strip (emergency banner) ──────────────────────────────────── */
+@keyframes ticker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-content {
+  animation: ticker 20s linear infinite;
+  display: inline-flex;
+  gap: 3rem;
+  white-space: nowrap;
+}
+
+/* ─── Accent text glow helpers ──────────────────────────────────────────── */
+/* Urgency pulse glow — for primary CTA text / badges */
+.neon-text-urgency {
+  text-shadow:
+    0 0 10px rgba(255, 179, 176, 0.8),
+    0 0 30px rgba(255, 179, 176, 0.4);
+}
+
+/* Mint / resolution glow — for success / resolved states */
+.neon-text-mint {
+  text-shadow:
+    0 0 10px rgba(68, 223, 171, 0.8),
+    0 0 30px rgba(68, 223, 171, 0.4);
+}
+
+/* Cool accent glow — for secondary CTAs / icon labels */
+.neon-text-cool {
+  text-shadow:
+    0 0 10px rgba(194, 198, 219, 0.7),
+    0 0 24px rgba(194, 198, 219, 0.3);
+}
+
+/* Legacy aliases (kept for backward-compat) */
+.neon-text-red {
+  text-shadow: 0 0 10px rgba(244, 63, 94, 0.8), 0 0 30px rgba(244, 63, 94, 0.4);
+}
+
+.neon-text-green {
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.8), 0 0 30px rgba(34, 197, 94, 0.4);
+}

@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+
+# Production
+build/
+dist/
+
+# ─────────────────────────────────────────────────────────────────
+# SECRETS & CREDENTIALS — NEVER COMMIT ANY OF THESE
+# ─────────────────────────────────────────────────────────────────
+
+# Environment variable files with real credentials
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Firebase / Google Cloud service account keys
+# (any file matching these patterns contains private keys)
+*firebase-adminsdk*.json
+*service-account*.json
+service-account.json
+*.json.key
+vibe2ship24-firebase-adminsdk-fbsvc-3239a59336.json
+
+# Generic secret file patterns
+*secret*.json
+*credentials*.json
+*private-key*.json
+*privatekey*.json
+
+# ─────────────────────────────────────────────────────────────────
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts

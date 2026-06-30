@@ -1,0 +1,11 @@
+export { default as AnimatedBackground } from './AnimatedBackground';
+export { default as StatCounter } from './StatCounter';
+export { default as NavBar } from './NavBar';
+export { default as HeroOrb } from './HeroOrb';
+export { default as HeroSection } from './HeroSection';
+export { default as ProblemSolution } from './ProblemSolution';
+export { default as HowItWorks } from './HowItWorks';
+export { default as TechStack } from './TechStack';
+export { default as HackathonBadge } from './HackathonBadge';
+export { default as FinalCTA } from './FinalCTA';
+export { default as Footer } from './Footer';
